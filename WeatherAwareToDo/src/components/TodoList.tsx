@@ -15,6 +15,7 @@ type Props = {
     id: number,
     category: TaskCategory
   ) => void;
+  translations: Record<number, string>;
 };
 
 export default function TodoList({
@@ -22,7 +23,8 @@ export default function TodoList({
   categories,
   weather,
   onToggle,
-  onCategoryChange
+  onCategoryChange,
+  translations
 }: Props) {
   if (todos.length === 0) {
     return <p>No tasks match the current filter.</p>;
@@ -41,6 +43,7 @@ export default function TodoList({
           weather={weather}
           onToggle={onToggle}
           onCategoryChange={onCategoryChange}
+          translatedTitle={translations[todo.id]}
         />
       ))}
     </ul>

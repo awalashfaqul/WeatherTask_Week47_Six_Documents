@@ -4,6 +4,7 @@ import type { TaskCategory } from "../types/Todo";
 import type Weather from "../types/Weather";
 
 import { getRecommendation } from "../utils/getRecommendation";
+import { getWeatherAlert } from "../utils/getWeatherAlert";
 
 type Props = {
   todo: Todo;
@@ -14,6 +15,7 @@ type Props = {
     id: number,
     category: TaskCategory
   ) => void;
+  translatedTitle?: string;
 };
 
 export default function TodoItem({
@@ -21,15 +23,29 @@ export default function TodoItem({
   category,
   weather,
   onToggle,
-  onCategoryChange
+  onCategoryChange,
+  translatedTitle
 }: Props) {
-  const recommendation = getRecommendation(
-    category,
-    weather
-  );
+  const severity = getWeatherAlert(weather);
+
+  const showWarning =
+    category === "outdoor" &&
+    (severity === "caution" ||
+      severity === "danger");
 
   return (
     <li className="todo-item">
+      {showWarning && (
+        <span
+          className={`task-alert ${severity}`}
+          role="img"
+          aria-label={`Weather ${severity}`}
+          title={`Outdoor weather: ${severity}`}
+        >
+          {severity === "danger" ? "🚨" : "⚠️"}
+        </span>
+      )}
+
       <div className="todo-header">
         <input
           type="checkbox"
@@ -40,38 +56,48 @@ export default function TodoItem({
 
         <label
           htmlFor={`todo-${todo.id}`}
-          className={todo.completed ? "completed" : ""}
+          className={
+            todo.completed ? "completed" : ""
+          }
         >
-          {todo.title}
+          {translatedTitle ?? todo.title}
         </label>
       </div>
 
       <p>
-        Status: {todo.completed ? "Completed" : "Pending"}
+        Status:{" "}
+        {todo.completed ? "Completed" : "Pending"}
       </p>
 
-      <label htmlFor={`category-${todo.id}`}>
-        Task category:
-      </label>
+      <div className="category-field">
+        <label htmlFor={`category-${todo.id}`}>
+          Category
+        </label>
 
-      <select
-        id={`category-${todo.id}`}
-        value={category}
-        onChange={(event) =>
-          onCategoryChange(
-            todo.id,
-            event.target.value as TaskCategory
-          )
-        }
-      >
-        <option value="unspecified">Unspecified</option>
-        <option value="indoor">Indoor</option>
-        <option value="outdoor">Outdoor</option>
-      </select>
+        <select
+          id={`category-${todo.id}`}
+          value={category}
+          onChange={(event) =>
+            onCategoryChange(
+              todo.id,
+              event.target.value as TaskCategory
+            )
+          }
+        >
+          <option value="unspecified">
+            Unspecified
+          </option>
+          <option value="indoor">Indoor</option>
+          <option value="outdoor">Outdoor</option>
+        </select>
+      </div>
 
       {category === "outdoor" && (
-        <p className="recommendation" role="status">
-          {recommendation}
+        <p
+          className={`recommendation ${severity}`}
+          role="status"
+        >
+          {getRecommendation(category, weather)}
         </p>
       )}
     </li>

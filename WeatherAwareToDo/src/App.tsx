@@ -8,7 +8,9 @@ import WeatherDashboard from "./components/WeatherDashboard";
 import { getUsers } from "./services/userApi";
 import { getTodos } from "./services/todoApi";
 import { getWeather } from "./services/weatherApi";
+import { translateTask } from "./services/translationApi";
 
+import type { TaskLanguage } from "./services/translationApi";
 import type User from "./types/User";
 import type Todo from "./types/Todo";
 import type Weather from "./types/Weather";
@@ -17,34 +19,50 @@ import type { TaskCategory } from "./types/Todo";
 type TaskFilter = "all" | "active" | "completed";
 
 export default function App() {
-  // USERS
+  // Users
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] =
     useState<number | null>(null);
   const [usersLoading, setUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState("");
 
-  // TASKS
+  // Tasks
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todosLoading, setTodosLoading] = useState(true);
   const [todosError, setTodosError] = useState("");
 
-  // NEW THURSDAY STATE
   const [categories, setCategories] =
     useState<Record<number, TaskCategory>>({});
 
   const [taskFilter, setTaskFilter] =
     useState<TaskFilter>("all");
 
-  // WEATHER
+  // Weather
+  const [cityInput, setCityInput] = useState("Stockholm");
   const [city, setCity] = useState("Stockholm");
+
   const [weather, setWeather] =
     useState<Weather | null>(null);
+
   const [weatherLoading, setWeatherLoading] =
     useState(false);
+
   const [weatherError, setWeatherError] = useState("");
 
-  // USER API
+  // Translation
+  const [language, setLanguage] =
+    useState<TaskLanguage>("original");
+
+  const [translations, setTranslations] =
+    useState<Record<number, string>>({});
+
+  const [translationLoading, setTranslationLoading] =
+    useState(false);
+
+  const [translationError, setTranslationError] =
+    useState("");
+
+  // Load users
   useEffect(() => {
     let active = true;
 
@@ -68,7 +86,7 @@ export default function App() {
     };
   }, []);
 
-  // TODO API
+  // Load tasks
   useEffect(() => {
     let active = true;
 
@@ -92,7 +110,7 @@ export default function App() {
     };
   }, []);
 
-  // WEATHER API
+  // Load weather
   useEffect(() => {
     let active = true;
 
@@ -104,12 +122,10 @@ export default function App() {
       try {
         const result = await getWeather(city);
         if (active) setWeather(result);
-      } catch (error) {
+      } catch {
         if (active) {
           setWeatherError(
-            error instanceof Error
-              ? error.message
-              : "Weather unavailable."
+            "Unable to find weather for this location."
           );
         }
       } finally {
@@ -124,148 +140,285 @@ export default function App() {
     };
   }, [city]);
 
-  // THURSDAY: TOGGLE COMPLETION
+  // Filter tasks by user and completion
+  const selectedTodos = todos.filter(
+    (todo) => todo.userId === selectedUserId
+  );
+
+  const visibleTodos = selectedTodos.filter(
+    (todo) => {
+      if (taskFilter === "active") {
+        return !todo.completed;
+      }
+
+      if (taskFilter === "completed") {
+        return todo.completed;
+      }
+
+      return true;
+    }
+  );
+
+  // Translate only the selected user's tasks.
+  // Cache translations for each language.
+  useEffect(() => {
+    let active = true;
+
+    if (
+      language === "original" ||
+      selectedTodos.length === 0
+    ) {
+      setTranslations({});
+      setTranslationLoading(false);
+      setTranslationError("");
+      return;
+    }
+
+    async function loadTranslations() {
+      setTranslationLoading(true);
+      setTranslationError("");
+      setTranslations({});
+
+      try {
+        const results = await Promise.all(
+          selectedTodos.map(async (todo) => ({
+            id: todo.id,
+            title: await translateTask(
+              todo.title,
+              language as "en" | "sv"
+            )
+          }))
+        );
+
+        if (active) {
+          setTranslations(
+            Object.fromEntries(
+              results.map((item) => [
+                item.id,
+                item.title
+              ])
+            )
+          );
+        }
+      } catch {
+        if (active) {
+          setTranslationError(
+            "Translation unavailable. Showing original titles."
+          );
+        }
+      } finally {
+        if (active) setTranslationLoading(false);
+      }
+    }
+
+    void loadTranslations();
+
+    return () => {
+      active = false;
+    };
+  }, [language, selectedUserId, todos.length]);
+
   function toggleTodo(id: number): void {
-    setTodos((previousTodos) =>
-      previousTodos.map((todo) =>
+    setTodos((previous) =>
+      previous.map((todo) =>
         todo.id === id
-          ? { ...todo, completed: !todo.completed }
+          ? {
+              ...todo,
+              completed: !todo.completed
+            }
           : todo
       )
     );
   }
 
-  // THURSDAY: UPDATE CATEGORY
   function changeCategory(
     id: number,
     category: TaskCategory
   ): void {
-    setCategories((previousCategories) => ({
-      ...previousCategories,
+    setCategories((previous) => ({
+      ...previous,
       [id]: category
     }));
   }
 
-  // THURSDAY: DERIVED TASK LIST
-  const selectedTodos = todos.filter(
-    (todo) => todo.userId === selectedUserId
-  );
+  function searchCity(
+  event: React.SubmitEvent<HTMLFormElement>
+): void {
+  event.preventDefault();
 
-  const visibleTodos = selectedTodos.filter((todo) => {
-    if (taskFilter === "active") {
-      return !todo.completed;
-    }
+  const value = cityInput.trim();
 
-    if (taskFilter === "completed") {
-      return todo.completed;
-    }
-
-    return true;
-  });
+  if (value) {
+    setCity(value);
+  }
+}
 
   return (
-    <main>
+    <main className="app-container">
       <h1>WeatherTask</h1>
 
-      <section>
-        <h2>Select User</h2>
+      <div className="app-layout">
+        <div className="tasks-column">
+          <section>
+            <h2>Select User</h2>
 
-        {usersLoading && <p>Loading users...</p>}
-        {usersError && <p role="alert">{usersError}</p>}
+            {usersLoading && (
+              <p>Loading users...</p>
+            )}
 
-        {!usersLoading && !usersError && (
-          <UserSelector
-            users={users}
-            selectedUserId={selectedUserId}
-            onSelectUser={(id) => {
-              setSelectedUserId(id);
-              setTaskFilter("all");
-            }}
-          />
-        )}
-      </section>
+            {usersError && (
+              <p role="alert">{usersError}</p>
+            )}
 
-      <section>
-        <h2>Current Weather</h2>
+            {!usersLoading && !usersError && (
+              <UserSelector
+                users={users}
+                selectedUserId={selectedUserId}
+                onSelectUser={(id) => {
+                  setSelectedUserId(id);
+                  setTaskFilter("all");
+                }}
+              />
+            )}
+          </section>
 
-        <label htmlFor="city">Select location:</label>
+          <section>
+            <h2>My Tasks</h2>
 
-        <select
-          id="city"
-          value={city}
-          onChange={(event) =>
-            setCity(event.target.value)
-          }
+            {todosLoading ? (
+              <p>Loading tasks...</p>
+            ) : todosError ? (
+              <p role="alert">{todosError}</p>
+            ) : selectedUserId === null ? (
+              <p>
+                Please select a user to view tasks.
+              </p>
+            ) : (
+              <>
+                <div className="task-toolbar">
+                  <div className="task-filters">
+                    {(
+                      [
+                        "all",
+                        "active",
+                        "completed"
+                      ] as TaskFilter[]
+                    ).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        aria-pressed={
+                          taskFilter === filter
+                        }
+                        onClick={() =>
+                          setTaskFilter(filter)
+                        }
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="language-field">
+                    <label htmlFor="task-language">
+                      Language
+                    </label>
+
+                    <select
+                      id="task-language"
+                      value={language}
+                      onChange={(event) =>
+                        setLanguage(
+                          event.target.value as TaskLanguage
+                        )
+                      }
+                    >
+                      <option value="original">
+                        Original
+                      </option>
+                      <option value="en">
+                        English
+                      </option>
+                      <option value="sv">
+                        Svenska
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
+                <p>
+                  Showing {visibleTodos.length} of{" "}
+                  {selectedTodos.length} tasks
+                </p>
+
+                {translationLoading && (
+                  <p role="status">
+                    Translating task titles...
+                  </p>
+                )}
+
+                {translationError && (
+                  <p role="alert">
+                    {translationError}
+                  </p>
+                )}
+
+                <TodoList
+                  todos={visibleTodos}
+                  categories={categories}
+                  weather={weather}
+                  onToggle={toggleTodo}
+                  onCategoryChange={changeCategory}
+                  translations={translations}
+                />
+              </>
+            )}
+          </section>
+        </div>
+
+        <aside
+          className="weather-sidebar"
+          aria-label="Weather information"
         >
-          <option value="Stockholm">Stockholm</option>
-          <option value="Gothenburg">Gothenburg</option>
-          <option value="Malmo">Malmö</option>
-          <option value="London">London</option>
-        </select>
+          <div className="weather-panel">
+            <form
+              className="city-search"
+              onSubmit={searchCity}
+            >
+              <label htmlFor="city-search">
+                Search worldwide weather
+              </label>
 
-        {weatherLoading ? (
-          <p>Loading weather...</p>
-        ) : weatherError ? (
-          <p role="alert">{weatherError}</p>
-        ) : weather ? (
-          <WeatherDashboard weather={weather} />
-        ) : (
-          <p>No weather available.</p>
-        )}
-      </section>
+              <div className="city-search-controls">
+                <input
+                  id="city-search"
+                  type="search"
+                  value={cityInput}
+                  onChange={(event) =>
+                    setCityInput(event.target.value)
+                  }
+                  placeholder="City, e.g. Tokyo"
+                  required
+                />
 
-      <section>
-        <h2>My Tasks</h2>
+                <button type="submit">
+                  Search
+                </button>
+              </div>
+            </form>
 
-        {todosLoading ? (
-          <p>Loading tasks...</p>
-        ) : todosError ? (
-          <p role="alert">{todosError}</p>
-        ) : selectedUserId === null ? (
-          <p>Please select a user to view tasks.</p>
-        ) : (
-          <>
-            <div className="task-filters">
-              <button
-                type="button"
-                aria-pressed={taskFilter === "all"}
-                onClick={() => setTaskFilter("all")}
-              >
-                All
-              </button>
-
-              <button
-                type="button"
-                aria-pressed={taskFilter === "active"}
-                onClick={() => setTaskFilter("active")}
-              >
-                Active
-              </button>
-
-              <button
-                type="button"
-                aria-pressed={taskFilter === "completed"}
-                onClick={() => setTaskFilter("completed")}
-              >
-                Completed
-              </button>
-            </div>
-
-            <p>
-              Showing {visibleTodos.length} of{" "}
-              {selectedTodos.length} tasks
-            </p>
-
-            <TodoList
-              todos={visibleTodos}
-              categories={categories}
-              weather={weather}
-              onToggle={toggleTodo}
-              onCategoryChange={changeCategory}
-            />
-          </>
-        )}
-      </section>
+            {weatherLoading ? (
+              <p>Loading weather...</p>
+            ) : weatherError ? (
+              <p role="alert">{weatherError}</p>
+            ) : weather ? (
+              <WeatherDashboard weather={weather} />
+            ) : (
+              <p>No weather available.</p>
+            )}
+          </div>
+        </aside>
+      </div>
     </main>
   );
 }
