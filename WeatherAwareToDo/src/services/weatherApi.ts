@@ -23,7 +23,9 @@ function mapWeather(data: any): Weather {
     temperature: data.current.temp_c,
     condition: data.current.condition.text,
     code: data.current.condition.code,
-    icon: `https:${data.current.condition.icon}`,
+    icon: data.current.condition.icon.startsWith("//")
+  ? `https:${data.current.condition.icon}`
+  : data.current.condition.icon,
     windSpeed: data.current.wind_kph,
     humidity: data.current.humidity,
     precipitation: data.current.precip_mm

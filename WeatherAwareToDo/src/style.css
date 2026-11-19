@@ -31,3 +31,91 @@ li {
     margin: 10px auto;
 }
 
+
+/* Thursday: task layout */
+
+.todo-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.todo-item {
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #d8e1ea;
+  border-radius: 10px;
+}
+
+.todo-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.todo-header input {
+  margin-top: 4px;
+}
+
+.todo-header label {
+  overflow-wrap: anywhere;
+}
+
+.completed {
+  text-decoration: line-through;
+  color: #667085;
+}
+
+.recommendation {
+  padding: 12px;
+  border-left: 4px solid #2563eb;
+  background: #eff6ff;
+  border-radius: 4px;
+}
+
+.task-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-filters button {
+  padding: 9px 14px;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+.task-filters button[aria-pressed="true"] {
+  background: #1d4ed8;
+  color: white;
+  border-color: #1d4ed8;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+
+@media (max-width: 600px) {
+  main {
+    margin: 0;
+    padding: 12px;
+  }
+
+  section {
+    padding: 14px;
+  }
+
+  select {
+    max-width: 100%;
+  }
+
+  .task-filters button {
+    flex: 1;
+  }
+}

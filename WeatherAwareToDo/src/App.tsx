@@ -12,21 +12,31 @@ import { getWeather } from "./services/weatherApi";
 import type User from "./types/User";
 import type Todo from "./types/Todo";
 import type Weather from "./types/Weather";
+import type { TaskCategory } from "./types/Todo";
+
+type TaskFilter = "all" | "active" | "completed";
 
 export default function App() {
-  // USER STATE
+  // USERS
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] =
     useState<number | null>(null);
   const [usersLoading, setUsersLoading] = useState(true);
   const [usersError, setUsersError] = useState("");
 
-  // TODO STATE
+  // TASKS
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todosLoading, setTodosLoading] = useState(true);
   const [todosError, setTodosError] = useState("");
 
-  // WEATHER STATE
+  // NEW THURSDAY STATE
+  const [categories, setCategories] =
+    useState<Record<number, TaskCategory>>({});
+
+  const [taskFilter, setTaskFilter] =
+    useState<TaskFilter>("all");
+
+  // WEATHER
   const [city, setCity] = useState("Stockholm");
   const [weather, setWeather] =
     useState<Weather | null>(null);
@@ -35,7 +45,7 @@ export default function App() {
   const [weatherError, setWeatherError] = useState("");
 
   // USER API
-  useEffect(() => { // Load users on mount
+  useEffect(() => {
     let active = true;
 
     async function loadUsers() {
@@ -52,11 +62,14 @@ export default function App() {
     }
 
     void loadUsers();
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // TODO API
-  useEffect(() => { // Load todos on mount
+  useEffect(() => {
     let active = true;
 
     async function loadTodos() {
@@ -73,11 +86,13 @@ export default function App() {
     }
 
     void loadTodos();
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // WEATHER API — RELOAD WHEN CITY CHANGES
-  // Load weather whenever the city changes
+  // WEATHER API
   useEffect(() => {
     let active = true;
 
@@ -88,37 +103,65 @@ export default function App() {
 
       try {
         const result = await getWeather(city);
-
-        if (active) {
-          setWeather(result);
-        }
+        if (active) setWeather(result);
       } catch (error) {
-        console.error("Weather API failed:", error);
-
         if (active) {
-            setWeatherError(
-              error instanceof Error
+          setWeatherError(
+            error instanceof Error
               ? error.message
-              : "Unknown weather error"
-            );
-      }
-      } finally {
-        if (active) {
-          setWeatherLoading(false);
+              : "Weather unavailable."
+          );
         }
+      } finally {
+        if (active) setWeatherLoading(false);
       }
     }
 
     void loadWeather();
 
-    return () => { // Cleanup on unmount or city change
+    return () => {
       active = false;
     };
   }, [city]);
 
+  // THURSDAY: TOGGLE COMPLETION
+  function toggleTodo(id: number): void {
+    setTodos((previousTodos) =>
+      previousTodos.map((todo) =>
+        todo.id === id
+          ? { ...todo, completed: !todo.completed }
+          : todo
+      )
+    );
+  }
+
+  // THURSDAY: UPDATE CATEGORY
+  function changeCategory(
+    id: number,
+    category: TaskCategory
+  ): void {
+    setCategories((previousCategories) => ({
+      ...previousCategories,
+      [id]: category
+    }));
+  }
+
+  // THURSDAY: DERIVED TASK LIST
   const selectedTodos = todos.filter(
     (todo) => todo.userId === selectedUserId
   );
+
+  const visibleTodos = selectedTodos.filter((todo) => {
+    if (taskFilter === "active") {
+      return !todo.completed;
+    }
+
+    if (taskFilter === "completed") {
+      return todo.completed;
+    }
+
+    return true;
+  });
 
   return (
     <main>
@@ -134,22 +177,11 @@ export default function App() {
           <UserSelector
             users={users}
             selectedUserId={selectedUserId}
-            onSelectUser={setSelectedUserId}
+            onSelectUser={(id) => {
+              setSelectedUserId(id);
+              setTaskFilter("all");
+            }}
           />
-        )}
-      </section>
-
-      <section>
-        <h2>My Tasks</h2>
-
-        {todosLoading ? (
-          <p>Loading tasks...</p>
-        ) : todosError ? (
-          <p role="alert">{todosError}</p>
-        ) : selectedUserId === null ? (
-          <p>Please select a user to view tasks.</p>
-        ) : (
-          <TodoList todos={selectedTodos} />
         )}
       </section>
 
@@ -161,9 +193,9 @@ export default function App() {
         <select
           id="city"
           value={city}
-          onChange={(event) => {
-            setCity(event.target.value);
-          }}
+          onChange={(event) =>
+            setCity(event.target.value)
+          }
         >
           <option value="Stockholm">Stockholm</option>
           <option value="Gothenburg">Gothenburg</option>
@@ -179,6 +211,59 @@ export default function App() {
           <WeatherDashboard weather={weather} />
         ) : (
           <p>No weather available.</p>
+        )}
+      </section>
+
+      <section>
+        <h2>My Tasks</h2>
+
+        {todosLoading ? (
+          <p>Loading tasks...</p>
+        ) : todosError ? (
+          <p role="alert">{todosError}</p>
+        ) : selectedUserId === null ? (
+          <p>Please select a user to view tasks.</p>
+        ) : (
+          <>
+            <div className="task-filters">
+              <button
+                type="button"
+                aria-pressed={taskFilter === "all"}
+                onClick={() => setTaskFilter("all")}
+              >
+                All
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={taskFilter === "active"}
+                onClick={() => setTaskFilter("active")}
+              >
+                Active
+              </button>
+
+              <button
+                type="button"
+                aria-pressed={taskFilter === "completed"}
+                onClick={() => setTaskFilter("completed")}
+              >
+                Completed
+              </button>
+            </div>
+
+            <p>
+              Showing {visibleTodos.length} of{" "}
+              {selectedTodos.length} tasks
+            </p>
+
+            <TodoList
+              todos={visibleTodos}
+              categories={categories}
+              weather={weather}
+              onToggle={toggleTodo}
+              onCategoryChange={changeCategory}
+            />
+          </>
         )}
       </section>
     </main>
